@@ -6,11 +6,12 @@
 
 generator client {
   provider = "prisma-client"
+  // Output path is relative to the prisma/schema.prisma file
+  output   = "../src/generated"
 }
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
 }
 
 model Student {
