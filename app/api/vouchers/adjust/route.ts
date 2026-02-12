@@ -16,13 +16,6 @@ export async function POST(request: Request) {
         { status: 400 }
       );
     }
-    if (!reason || !reason.trim()) {
-      return NextResponse.json(
-        { error: "reason is required" },
-        { status: 400 }
-      );
-    }
-
     const student = await prisma.student.findUnique({
       where: { studentId },
     });
@@ -42,7 +35,8 @@ export async function POST(request: Request) {
         data: {
           studentId: student.id,
           changeAmount: Math.floor(delta),
-          reason,
+          // 变动理由改为可选，后端允许为空字符串
+          reason: reason ?? "",
           type: "manual",
         },
       }),

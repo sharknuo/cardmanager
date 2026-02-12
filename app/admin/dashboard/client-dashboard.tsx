@@ -19,7 +19,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-import { Plus, Minus, RefreshCcw } from "lucide-react";
+import { Plus, Minus, RefreshCcw, Edit2, Trash2 } from "lucide-react";
 
 export type StudentWithNext = {
   id: number;
@@ -72,6 +72,19 @@ export function ClientDashboard({ initialStudents, intervalDays }: Props) {
   const [newStudentId, setNewStudentId] = useState("");
   const [newInitialBalance, setNewInitialBalance] = useState("");
   const [addingStudent, setAddingStudent] = useState(false);
+
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editingStudent, setEditingStudent] = useState<StudentWithNext | null>(
+    null
+  );
+  const [editName, setEditName] = useState("");
+  const [editStudentId, setEditStudentId] = useState("");
+
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deletingStudent, setDeletingStudent] =
+    useState<StudentWithNext | null>(null);
+  const [processingEdit, setProcessingEdit] = useState(false);
+  const [processingDelete, setProcessingDelete] = useState(false);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -126,10 +139,6 @@ export function ClientDashboard({ initialStudents, intervalDays }: Props) {
 
   const handleSubmitAdjust = async () => {
     if (!pendingStudent || pendingDelta === null) return;
-    if (!reason.trim()) {
-      setError("请填写变动理由");
-      return;
-    }
     try {
       setSubmitting(true);
       setError(null);
@@ -199,6 +208,100 @@ export function ClientDashboard({ initialStudents, intervalDays }: Props) {
     } catch (err: any) {
       console.error(err);
       setError(err.message ?? "重置失败");
+    }
+  };
+
+  const openEditStudentDialog = (student: StudentWithNext) => {
+    setEditingStudent(student);
+    setEditName(student.name);
+    setEditStudentId(student.studentId);
+    setError(null);
+    setEditDialogOpen(true);
+  };
+
+  const handleSubmitEditStudent = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingStudent) return;
+
+    const trimmedName = editName.trim();
+
+    if (!trimmedName) {
+      setError("请填写学生姓名");
+      return;
+    }
+
+    try {
+      setProcessingEdit(true);
+      setError(null);
+
+      console.log('EDITING STUDENT', editingStudent);
+
+      const res = await fetch(`/api/students/${editingStudent.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: trimmedName,
+        }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.error || "更新学生信息失败");
+      }
+
+      const updated = data.student as StudentWithNext;
+      setStudents((prev) =>
+        prev.map((s) =>
+          s.id === updated.id
+            ? {
+                ...s,
+                name: updated.name,
+                studentId: updated.studentId,
+              }
+            : s
+        )
+      );
+
+      setEditDialogOpen(false);
+    } catch (err: any) {
+      console.error(err);
+      setError(err.message ?? "更新学生信息失败");
+    } finally {
+      setProcessingEdit(false);
+    }
+  };
+
+  const openDeleteStudentDialog = (student: StudentWithNext) => {
+    setDeletingStudent(student);
+    setError(null);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleConfirmDeleteStudent = async () => {
+    if (!deletingStudent) return;
+
+    try {
+      setProcessingDelete(true);
+      setError(null);
+
+      const res = await fetch(`/api/students/${deletingStudent.id}`, {
+        method: "DELETE",
+      });
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.error || "删除学生失败");
+      }
+
+      setStudents((prev) =>
+        prev.filter((s) => s.id !== deletingStudent.id)
+      );
+      setDeleteDialogOpen(false);
+    } catch (err: any) {
+      console.error(err);
+      setError(err.message ?? "删除学生失败");
+    } finally {
+      setProcessingDelete(false);
     }
   };
 
@@ -333,10 +436,11 @@ export function ClientDashboard({ initialStudents, intervalDays }: Props) {
                           : "—"}
                       </TableCell>
                       <TableCell>
-                        <div className="flex items-center justify-end gap-2">
+                        <div className="flex flex-wrap items-center justify-end gap-2">
                           <Button
                             size="icon"
                             variant="outline"
+                            className="border-zinc-300 text-zinc-700 hover:bg-zinc-100 hover:text-zinc-900"
                             onClick={() => openAdjustDialog(s, -1)}
                             aria-label="减少 1 张"
                           >
@@ -345,6 +449,7 @@ export function ClientDashboard({ initialStudents, intervalDays }: Props) {
                           <Button
                             size="icon"
                             variant="outline"
+                            className="border-zinc-300 text-zinc-700 hover:bg-zinc-100 hover:text-zinc-900"
                             onClick={() => openAdjustDialog(s, 1)}
                             aria-label="增加 1 张"
                           >
@@ -353,10 +458,29 @@ export function ClientDashboard({ initialStudents, intervalDays }: Props) {
                           <Button
                             size="icon"
                             variant="ghost"
+                            className="text-zinc-500 hover:text-zinc-700 hover:bg-zinc-100"
                             onClick={() => handleReset(s)}
                             aria-label="重置计时"
                           >
                             <RefreshCcw className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="outline"
+                            className="border-zinc-300 text-zinc-700 hover:bg-zinc-100 hover:text-zinc-900"
+                            onClick={() => openEditStudentDialog(s)}
+                            aria-label="修改学生属性"
+                          >
+                            <Edit2 className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="outline"
+                            className="border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700"
+                            onClick={() => openDeleteStudentDialog(s)}
+                            aria-label="删除学生"
+                          >
+                            <Trash2 className="h-4 w-4" />
                           </Button>
                         </div>
                       </TableCell>
@@ -503,7 +627,7 @@ export function ClientDashboard({ initialStudents, intervalDays }: Props) {
                           · {log.type === "manual" ? "手动调整" : "自动发券"}
                         </div>
                         <div className="text-xs text-zinc-600">
-                          理由：{log.reason}
+                          理由：{log.reason?.trim() ? log.reason : "/"}
                         </div>
                       </li>
                     ))}
@@ -552,26 +676,59 @@ export function ClientDashboard({ initialStudents, intervalDays }: Props) {
         <Dialog open={reasonDialogOpen} onOpenChange={setReasonDialogOpen}>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>请输入变动理由</DialogTitle>
+              <DialogTitle className="text-sm text-zinc-900">
+                设置变动数量与理由
+              </DialogTitle>
               <DialogDescription>
                 正在为{" "}
                 <span className="font-semibold">
                   {pendingStudent?.name ?? ""}
                 </span>{" "}
                 {pendingDelta && pendingDelta > 0 ? "增加" : "减少"}{" "}
-                {Math.abs(pendingDelta ?? 0)} 张迟交券。
+                {Math.max(1, Math.abs(pendingDelta ?? 1))} 张迟交券。
               </DialogDescription>
             </DialogHeader>
-            <div className="space-y-3">
-              <textarea
-                className="w-full min-h-[80px] rounded-md border border-zinc-300 px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500"
-                placeholder="请输入调整原因，便于后续查询记录"
-                value={reason}
-                onChange={(e) => setReason(e.target.value)}
-              />
+            <div className="space-y-4">
+              <div className="space-y-1">
+                <label className="block text-xs font-medium text-zinc-800">
+                  调整数量（必须大于 0）
+                </label>
+                <input
+                  type="number"
+                  min={1}
+                  className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm shadow-sm text-zinc-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500"
+                  value={
+                    pendingDelta !== null
+                      ? Math.max(1, Math.abs(pendingDelta))
+                      : 1
+                  }
+                  onChange={(e) => {
+                    const raw = Number(e.target.value);
+                    const isIncrease = (pendingDelta ?? 1) > 0;
+                    if (Number.isNaN(raw)) {
+                      setPendingDelta(isIncrease ? 1 : -1);
+                      return;
+                    }
+                    const value = Math.max(1, Math.floor(raw));
+                    setPendingDelta(isIncrease ? value : -value);
+                  }}
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="block text-xs font-medium text-zinc-800">
+                  变动理由
+                </label>
+                <textarea
+                  className="w-full min-h-[80px] rounded-md border border-zinc-400 px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-600"
+                  placeholder="请输入调整原因，便于后续查询记录"
+                  value={reason}
+                  onChange={(e) => setReason(e.target.value)}
+                />
+              </div>
               <div className="flex justify-end gap-2">
                 <Button
                   variant="outline"
+                  className="border-zinc-300 text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900"
                   onClick={() => setReasonDialogOpen(false)}
                   disabled={submitting}
                 >
@@ -581,6 +738,88 @@ export function ClientDashboard({ initialStudents, intervalDays }: Props) {
                   {submitting ? "提交中..." : "确认提交"}
                 </Button>
               </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle className="text-sm text-zinc-900">
+                修改学生信息
+              </DialogTitle>
+              <DialogDescription>
+                编辑学生姓名与学号，保存后将立即生效。
+              </DialogDescription>
+            </DialogHeader>
+            <form onSubmit={handleSubmitEditStudent} className="space-y-4">
+              <div className="space-y-1">
+                <label className="block text-xs font-medium text-zinc-800">
+                  学生姓名
+                </label>
+                <input
+                  type="text"
+                  className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm shadow-sm text-zinc-900 placeholder:text-zinc-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500"
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="block text-xs font-medium text-zinc-800">
+                  学号（不可修改）
+                </label>
+                <div className="rounded-md border border-dashed border-zinc-300 bg-zinc-50 px-3 py-2 text-sm text-zinc-600">
+                  {editingStudent?.studentId ?? editStudentId}
+                </div>
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="border-zinc-300 text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900"
+                  onClick={() => setEditDialogOpen(false)}
+                  disabled={processingEdit}
+                >
+                  取消
+                </Button>
+                <Button type="submit" disabled={processingEdit}>
+                  {processingEdit ? "保存中..." : "保存修改"}
+                </Button>
+              </div>
+            </form>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle className="text-sm text-zinc-900">
+                确认删除学生
+              </DialogTitle>
+              <DialogDescription>
+                确定要删除{" "}
+                <span className="font-semibold">
+                  {deletingStudent?.name ?? ""}
+                </span>{" "}
+                吗？该操作会同时删除其所有迟交券记录，且无法恢复。
+              </DialogDescription>
+            </DialogHeader>
+            <div className="flex justify-end gap-2">
+              <Button
+                variant="outline"
+                className="border-zinc-300 text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900"
+                onClick={() => setDeleteDialogOpen(false)}
+                disabled={processingDelete}
+              >
+                取消
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={handleConfirmDeleteStudent}
+                disabled={processingDelete}
+              >
+                {processingDelete ? "删除中..." : "确认删除"}
+              </Button>
             </div>
           </DialogContent>
         </Dialog>
