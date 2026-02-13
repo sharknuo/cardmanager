@@ -9,7 +9,7 @@ async function getInitialData() {
     prisma.config.findFirst(),
   ]);
 
-  console.log("students", students);
+  //console.log("students", students);
 
   const intervalDays = config?.intervalDays ?? null;
   const awardAmount = config?.awardAmount ?? null;
