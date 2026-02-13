@@ -11,7 +11,8 @@
 
 export const VoucherType = {
   manual: 'manual',
-  auto: 'auto'
+  auto: 'auto',
+  reset: 'reset'
 } as const
 
 export type VoucherType = (typeof VoucherType)[keyof typeof VoucherType]

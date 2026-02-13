@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { VoucherType } from "@/src/generated/client";
 
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { studentId } = body as { studentId?: string };
+    const { studentId, reason } = body as { studentId?: string; reason?: string };
 
     if (!studentId) {
       return NextResponse.json(
@@ -23,12 +24,22 @@ export async function POST(request: Request) {
 
     const now = new Date();
 
-    const updatedStudent = await prisma.student.update({
-      where: { id: student.id },
-      data: {
-        lastAwardDate: now,
-      },
-    });
+    const [updatedStudent] = await prisma.$transaction([
+      prisma.student.update({
+        where: { id: student.id },
+        data: {
+          lastAwardDate: now,
+        },
+      }),
+      prisma.voucherLog.create({
+        data: {
+          studentId: student.id,
+          changeAmount: 0,
+          reason: reason ?? "",
+          type: VoucherType.reset,
+        },
+      }),
+    ]);
 
     return NextResponse.json({ student: updatedStudent });
   } catch (error) {

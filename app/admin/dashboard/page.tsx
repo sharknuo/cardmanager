@@ -10,6 +10,7 @@ async function getInitialData() {
   ]);
 
   const intervalDays = config?.intervalDays ?? null;
+  const awardAmount = config?.awardAmount ?? null;
 
   const computeNextAwardDate = (
     lastAwardDate: Date | null,
@@ -35,16 +36,17 @@ async function getInitialData() {
     ),
   }));
 
-  return { initialStudents, intervalDays };
+  return { initialStudents, intervalDays, awardAmount };
 }
 
 export default async function AdminDashboardPage() {
-  const { initialStudents, intervalDays } = await getInitialData();
+  const { initialStudents, intervalDays, awardAmount } = await getInitialData();
 
   return (
     <ClientDashboard
       initialStudents={initialStudents}
       intervalDays={intervalDays}
+      awardAmount={awardAmount}
     />
   );
 }

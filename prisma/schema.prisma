@@ -44,4 +44,5 @@ model Config {
 enum VoucherType {
   manual
   auto
+  reset
 }

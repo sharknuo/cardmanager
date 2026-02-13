@@ -35,7 +35,7 @@ type VoucherLogItem = {
   id: number;
   changeAmount: number;
   reason: string;
-  type: "manual" | "auto";
+  type: "manual" | "auto" | "reset";
   createdAt: string;
   student: {
     name: string;
@@ -46,15 +46,36 @@ type VoucherLogItem = {
 type Props = {
   initialStudents: StudentWithNext[];
   intervalDays: number | null;
+  awardAmount: number | null;
 };
 
-export function ClientDashboard({ initialStudents, intervalDays }: Props) {
+const inputClass =
+  "w-full rounded-md border border-zinc-300 px-3 py-2 text-sm shadow-sm text-zinc-900 placeholder:text-zinc-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500";
+
+export function ClientDashboard({
+  initialStudents,
+  intervalDays: initialIntervalDays,
+  awardAmount: initialAwardAmount,
+}: Props) {
   const [students, setStudents] = useState<StudentWithNext[]>(initialStudents);
+  const [intervalDays, setIntervalDays] = useState<number | null>(
+    initialIntervalDays
+  );
+  const [awardAmount, setAwardAmount] = useState<number | null>(
+    initialAwardAmount
+  );
+  const [configIntervalDays, setConfigIntervalDays] = useState(
+    initialIntervalDays ?? ""
+  );
+  const [configAwardAmount, setConfigAwardAmount] = useState(
+    initialAwardAmount ?? ""
+  );
+  const [savingConfig, setSavingConfig] = useState(false);
   const [logs, setLogs] = useState<VoucherLogItem[]>([]);
   const [loadingLogs, setLoadingLogs] = useState(false);
   const [totalLogs, setTotalLogs] = useState(0);
   const [page, setPage] = useState(1);
-  const pageSize = 20;
+  const pageSize =5;
 
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
@@ -85,6 +106,66 @@ export function ClientDashboard({ initialStudents, intervalDays }: Props) {
     useState<StudentWithNext | null>(null);
   const [processingEdit, setProcessingEdit] = useState(false);
   const [processingDelete, setProcessingDelete] = useState(false);
+
+  const [resetDialogOpen, setResetDialogOpen] = useState(false);
+  const [resetPendingStudent, setResetPendingStudent] =
+    useState<StudentWithNext | null>(null);
+  const [resetReason, setResetReason] = useState("");
+  const [resetSubmitting, setResetSubmitting] = useState(false);
+
+  const [checkingAutoVoucher, setCheckingAutoVoucher] = useState(true);
+  const [autoCheckMessage, setAutoCheckMessage] = useState<string | null>(null);
+  const [autoCheckIsError, setAutoCheckIsError] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    const run = async () => {
+      try {
+        setCheckingAutoVoucher(true);
+        setAutoCheckMessage(null);
+        setAutoCheckIsError(false);
+        const res = await fetch("/api/vouchers/auto-check");
+        const data = (await res.json()) as {
+          studentCount?: number;
+          totalAwarded?: number;
+          error?: string;
+        };
+        if (cancelled) return;
+        if (!res.ok) {
+          setAutoCheckMessage(data.error ?? "自动发券检查失败");
+          setAutoCheckIsError(true);
+          return;
+        }
+        const count = data.studentCount ?? 0;
+        const total = data.totalAwarded ?? 0;
+        if (count > 0 && total > 0) {
+          setAutoCheckMessage(`系统已自动为 ${count} 名学生发放了迟交券`);
+          setAutoCheckIsError(false);
+          const listRes = await fetch("/api/students");
+          if (listRes.ok && !cancelled) {
+            const listData = (await listRes.json()) as {
+              students: StudentWithNext[];
+            };
+            setStudents(listData.students);
+          }
+          setTimeout(() => {
+            if (!cancelled) setAutoCheckMessage(null);
+          }, 5000);
+        }
+      } catch {
+        if (!cancelled) {
+          setAutoCheckMessage("自动发券检查失败");
+          setAutoCheckIsError(true);
+        }
+      } finally {
+        if (!cancelled) setCheckingAutoVoucher(false);
+      }
+    };
+    run();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -170,14 +251,30 @@ export function ClientDashboard({ initialStudents, intervalDays }: Props) {
     }
   };
 
-  const handleReset = async (student: StudentWithNext) => {
-    if (!confirm(`确定要重置 ${student.name} 的计时吗？`)) return;
+  const openResetDialog = (student: StudentWithNext) => {
+    setResetPendingStudent(student);
+    setResetReason("");
+    setError(null);
+    setResetDialogOpen(true);
+  };
+
+  const handleSubmitReset = async () => {
+    if (!resetPendingStudent) return;
+    const trimmedReason = resetReason.trim();
+    if (!trimmedReason) {
+      setError("请填写重置理由");
+      return;
+    }
     try {
+      setResetSubmitting(true);
       setError(null);
       const res = await fetch("/api/vouchers/reset", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ studentId: student.studentId }),
+        body: JSON.stringify({
+          studentId: resetPendingStudent.studentId,
+          reason: trimmedReason,
+        }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -192,7 +289,7 @@ export function ClientDashboard({ initialStudents, intervalDays }: Props) {
         prev.map((s) => {
           if (s.id !== updated.id) return s;
           const lastAwardDate = updated.lastAwardDate;
-          let nextAwardDate = s.nextAwardDate;
+          let nextAwardDate: string | null = s.nextAwardDate ?? null;
           if (intervalDays && intervalDays > 0 && lastAwardDate) {
             const base = new Date(lastAwardDate);
             base.setDate(base.getDate() + intervalDays);
@@ -205,9 +302,12 @@ export function ClientDashboard({ initialStudents, intervalDays }: Props) {
           };
         })
       );
+      setResetDialogOpen(false);
     } catch (err: any) {
       console.error(err);
       setError(err.message ?? "重置失败");
+    } finally {
+      setResetSubmitting(false);
     }
   };
 
@@ -224,11 +324,12 @@ export function ClientDashboard({ initialStudents, intervalDays }: Props) {
     if (!editingStudent) return;
 
     const trimmedName = editName.trim();
+  const trimmedStudentId = editStudentId.trim();
 
-    if (!trimmedName) {
-      setError("请填写学生姓名");
-      return;
-    }
+  if (!trimmedName) {
+    setError("请填写学生姓名");
+    return;
+  }
 
     try {
       setProcessingEdit(true);
@@ -241,6 +342,7 @@ export function ClientDashboard({ initialStudents, intervalDays }: Props) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: trimmedName,
+          studentId: trimmedStudentId,
         }),
       });
 
@@ -376,14 +478,33 @@ export function ClientDashboard({ initialStudents, intervalDays }: Props) {
           </p>
         </header>
 
-        {intervalDays ? (
+        {intervalDays != null && intervalDays > 0 && awardAmount != null && awardAmount > 0 ? (
           <div className="rounded-md border border-zinc-200 bg-white px-4 py-2 text-sm text-zinc-700">
             当前配置：每{" "}
-            <span className="font-semibold">{intervalDays}</span> 天自动发放一次迟交券。
+            <span className="font-semibold">{intervalDays}</span> 天自动发放一次迟交券，每次{" "}
+            <span className="font-semibold">{awardAmount}</span> 张。
           </div>
         ) : (
           <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-700">
             尚未配置发券规则（Config），预计发券日期将无法计算。
+          </div>
+        )}
+
+        {checkingAutoVoucher && (
+          <div className="rounded-md border border-zinc-200 bg-zinc-100 px-4 py-2 text-sm text-zinc-600">
+            正在检查自动发券…
+          </div>
+        )}
+
+        {autoCheckMessage && !checkingAutoVoucher && (
+          <div
+            className={
+              autoCheckIsError
+                ? "rounded-md border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700"
+                : "rounded-md border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm text-emerald-700"
+            }
+          >
+            {autoCheckMessage}
           </div>
         )}
 
@@ -394,7 +515,117 @@ export function ClientDashboard({ initialStudents, intervalDays }: Props) {
         )}
 
         <div className="grid gap-8 md:grid-cols-[2fr,1.3fr] items-start">
-          <section className="space-y-3">
+          <section className="space-y-4">
+            <div className="rounded-md border border-zinc-200 bg-white p-4 space-y-4">
+              <h2 className="text-lg font-semibold text-zinc-900">
+                发券规则
+              </h2>
+              <p className="text-sm text-zinc-500">
+                设置自动发券的间隔天数与单次发放张数，保存后立即生效。
+              </p>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-1">
+                  <label className="block text-xs font-medium text-zinc-800">
+                    间隔天数
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    className={inputClass}
+                    placeholder="例如：7"
+                    value={configIntervalDays}
+                    onChange={(e) => setConfigIntervalDays(e.target.value)}
+                  />
+                  <p className="text-xs text-zinc-500">
+                    每满该天数自动发放一次迟交券
+                  </p>
+                </div>
+                <div className="space-y-1">
+                  <label className="block text-xs font-medium text-zinc-800">
+                    单次发放张数
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    className={inputClass}
+                    placeholder="例如：1"
+                    value={configAwardAmount}
+                    onChange={(e) => setConfigAwardAmount(e.target.value)}
+                  />
+                  <p className="text-xs text-zinc-500">
+                    每次自动发券增加的迟交券数量
+                  </p>
+                </div>
+              </div>
+              <div className="flex justify-end">
+                <Button
+                  onClick={async () => {
+                    const days =
+                      configIntervalDays === ""
+                        ? undefined
+                        : Math.max(
+                            0,
+                            Math.floor(Number(configIntervalDays)) || 0
+                          );
+                    const amount =
+                      configAwardAmount === ""
+                        ? undefined
+                        : Math.max(
+                            0,
+                            Math.floor(Number(configAwardAmount)) || 0
+                          );
+                    if (days === undefined && amount === undefined) {
+                      setError("请至少填写间隔天数或单次发放张数");
+                      return;
+                    }
+                    try {
+                      setSavingConfig(true);
+                      setError(null);
+                      const res = await fetch("/api/config", {
+                        method: "PATCH",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          intervalDays: days,
+                          awardAmount: amount,
+                        }),
+                      });
+                      const data = await res.json().catch(() => ({}));
+                      if (!res.ok) {
+                        throw new Error(data.error ?? "保存失败");
+                      }
+                      const nextDays =
+                        data.intervalDays != null ? data.intervalDays : null;
+                      const nextAmount =
+                        data.awardAmount != null ? data.awardAmount : null;
+                      setIntervalDays(nextDays);
+                      setAwardAmount(nextAmount);
+                      setConfigIntervalDays(
+                        nextDays != null ? String(nextDays) : ""
+                      );
+                      setConfigAwardAmount(
+                        nextAmount != null ? String(nextAmount) : ""
+                      );
+                      const listRes = await fetch("/api/students");
+                      if (listRes.ok) {
+                        const listData = (await listRes.json()) as {
+                          students: StudentWithNext[];
+                        };
+                        setStudents(listData.students);
+                      }
+                    } catch (err: any) {
+                      setError(err.message ?? "保存配置失败");
+                    } finally {
+                      setSavingConfig(false);
+                    }
+                  }}
+                  disabled={savingConfig}
+                  className="bg-zinc-800 text-white hover:bg-zinc-700"
+                >
+                  {savingConfig ? "保存中…" : "保存规则"}
+                </Button>
+              </div>
+            </div>
+
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-semibold text-zinc-900">
                 学生列表
@@ -457,9 +688,9 @@ export function ClientDashboard({ initialStudents, intervalDays }: Props) {
                           </Button>
                           <Button
                             size="icon"
-                            variant="ghost"
-                            className="text-zinc-500 hover:text-zinc-700 hover:bg-zinc-100"
-                            onClick={() => handleReset(s)}
+                            variant="outline"
+                            className="border-zinc-300 text-zinc-700 hover:bg-zinc-100 hover:text-zinc-900"
+                            onClick={() => openResetDialog(s)}
                             aria-label="重置计时"
                           >
                             <RefreshCcw className="h-4 w-4" />
@@ -609,22 +840,31 @@ export function ClientDashboard({ initialStudents, intervalDays }: Props) {
                           <span className="font-medium text-zinc-900">
                             {log.student.name} ({log.student.studentId})
                           </span>
-                          <span
-                            className={
-                              log.changeAmount >= 0
-                                ? "text-emerald-600"
-                                : "text-red-600"
-                            }
-                          >
-                            {log.changeAmount > 0 ? "+" : ""}
-                            {log.changeAmount}
-                          </span>
+                          {log.type === "reset" ? (
+                            <span className="text-zinc-600">重置计时</span>
+                          ) : (
+                            <span
+                              className={
+                                log.changeAmount >= 0
+                                  ? "text-emerald-600"
+                                  : "text-red-600"
+                              }
+                            >
+                              {log.changeAmount > 0 ? "+" : ""}
+                              {log.changeAmount}
+                            </span>
+                          )}
                         </div>
                         <div className="text-xs text-zinc-500">
                           {format(new Date(log.createdAt), "yyyy-MM-dd HH:mm:ss", {
                             locale: zhCN,
                           })}{" "}
-                          · {log.type === "manual" ? "手动调整" : "自动发券"}
+                          ·{" "}
+                          {log.type === "manual"
+                            ? "手动调整"
+                            : log.type === "auto"
+                              ? "自动发券"
+                              : "重置计时"}
                         </div>
                         <div className="text-xs text-zinc-600">
                           理由：{log.reason?.trim() ? log.reason : "/"}
@@ -742,6 +982,52 @@ export function ClientDashboard({ initialStudents, intervalDays }: Props) {
           </DialogContent>
         </Dialog>
 
+        <Dialog open={resetDialogOpen} onOpenChange={setResetDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle className="text-sm text-zinc-900">
+                重置计时
+              </DialogTitle>
+              <DialogDescription>
+                正在为{" "}
+                <span className="font-semibold">
+                  {resetPendingStudent?.name ?? ""}
+                </span>{" "}
+                重置发券计时，下次发券将从当前时间起重新计算。
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="space-y-1">
+                <label className="block text-xs font-medium text-zinc-800">
+                  重置理由
+                </label>
+                <textarea
+                  className="w-full min-h-[80px] rounded-md border border-zinc-400 px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-600"
+                  placeholder="请输入重置原因，便于后续查询记录"
+                  value={resetReason}
+                  onChange={(e) => setResetReason(e.target.value)}
+                />
+              </div>
+              {error && (
+                <p className="text-sm text-red-600">{error}</p>
+              )}
+              <div className="flex justify-end gap-2">
+                <Button
+                  variant="outline"
+                  className="border-zinc-300 text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900"
+                  onClick={() => setResetDialogOpen(false)}
+                  disabled={resetSubmitting}
+                >
+                  取消
+                </Button>
+                <Button onClick={handleSubmitReset} disabled={resetSubmitting}>
+                  {resetSubmitting ? "提交中..." : "确认提交"}
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+
         <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
           <DialogContent>
             <DialogHeader>
@@ -766,11 +1052,14 @@ export function ClientDashboard({ initialStudents, intervalDays }: Props) {
               </div>
               <div className="space-y-1">
                 <label className="block text-xs font-medium text-zinc-800">
-                  学号（不可修改）
+                  学号
                 </label>
-                <div className="rounded-md border border-dashed border-zinc-300 bg-zinc-50 px-3 py-2 text-sm text-zinc-600">
-                  {editingStudent?.studentId ?? editStudentId}
-                </div>
+                <input
+                  type="text"
+                  className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm shadow-sm text-zinc-900 placeholder:text-zinc-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500"
+                  value={editStudentId}
+                  onChange={(e) => setEditStudentId(e.target.value)}
+                />
               </div>
               <div className="flex justify-end gap-2">
                 <Button
