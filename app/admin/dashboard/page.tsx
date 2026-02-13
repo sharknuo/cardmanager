@@ -9,6 +9,8 @@ async function getInitialData() {
     prisma.config.findFirst(),
   ]);
 
+  console.log("students", students);
+
   const intervalDays = config?.intervalDays ?? null;
   const awardAmount = config?.awardAmount ?? null;
 
@@ -20,6 +22,7 @@ async function getInitialData() {
     const base = lastAwardDate ?? createdAt;
     const d = new Date(base);
     d.setDate(d.getDate() + intervalDays);
+
     return d.toISOString();
   };
 

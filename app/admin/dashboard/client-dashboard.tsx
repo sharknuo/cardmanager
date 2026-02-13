@@ -106,66 +106,11 @@ export function ClientDashboard({
     useState<StudentWithNext | null>(null);
   const [processingEdit, setProcessingEdit] = useState(false);
   const [processingDelete, setProcessingDelete] = useState(false);
-
   const [resetDialogOpen, setResetDialogOpen] = useState(false);
   const [resetPendingStudent, setResetPendingStudent] =
     useState<StudentWithNext | null>(null);
   const [resetReason, setResetReason] = useState("");
   const [resetSubmitting, setResetSubmitting] = useState(false);
-
-  const [checkingAutoVoucher, setCheckingAutoVoucher] = useState(true);
-  const [autoCheckMessage, setAutoCheckMessage] = useState<string | null>(null);
-  const [autoCheckIsError, setAutoCheckIsError] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-    const run = async () => {
-      try {
-        setCheckingAutoVoucher(true);
-        setAutoCheckMessage(null);
-        setAutoCheckIsError(false);
-        const res = await fetch("/api/vouchers/auto-check");
-        const data = (await res.json()) as {
-          studentCount?: number;
-          totalAwarded?: number;
-          error?: string;
-        };
-        if (cancelled) return;
-        if (!res.ok) {
-          setAutoCheckMessage(data.error ?? "自动发券检查失败");
-          setAutoCheckIsError(true);
-          return;
-        }
-        const count = data.studentCount ?? 0;
-        const total = data.totalAwarded ?? 0;
-        if (count > 0 && total > 0) {
-          setAutoCheckMessage(`系统已自动为 ${count} 名学生发放了迟交券`);
-          setAutoCheckIsError(false);
-          const listRes = await fetch("/api/students");
-          if (listRes.ok && !cancelled) {
-            const listData = (await listRes.json()) as {
-              students: StudentWithNext[];
-            };
-            setStudents(listData.students);
-          }
-          setTimeout(() => {
-            if (!cancelled) setAutoCheckMessage(null);
-          }, 5000);
-        }
-      } catch {
-        if (!cancelled) {
-          setAutoCheckMessage("自动发券检查失败");
-          setAutoCheckIsError(true);
-        }
-      } finally {
-        if (!cancelled) setCheckingAutoVoucher(false);
-      }
-    };
-    run();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -487,24 +432,6 @@ export function ClientDashboard({
         ) : (
           <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-700">
             尚未配置发券规则（Config），预计发券日期将无法计算。
-          </div>
-        )}
-
-        {checkingAutoVoucher && (
-          <div className="rounded-md border border-zinc-200 bg-zinc-100 px-4 py-2 text-sm text-zinc-600">
-            正在检查自动发券…
-          </div>
-        )}
-
-        {autoCheckMessage && !checkingAutoVoucher && (
-          <div
-            className={
-              autoCheckIsError
-                ? "rounded-md border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700"
-                : "rounded-md border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm text-emerald-700"
-            }
-          >
-            {autoCheckMessage}
           </div>
         )}
 

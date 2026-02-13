@@ -25,82 +25,108 @@ function addDaysShanghai(dateStr: string, days: number): string {
   return getShanghaiDateStr(next);
 }
 
+export type AutoVoucherResult = {
+  studentCount: number;
+  totalAwarded: number;
+  message?: string;
+};
+
 /**
- * 自动发券检查：遍历所有学生，按 intervalDays/awardAmount 计算应发券数，
- * 在事务中更新 balance、lastAwardDate 并写入 VoucherLog(type: 'auto')。
- * 日期在 Asia/Shanghai 下计算，同一天多次调用会因 diffDays < intervalDays 而跳过。
+ * 核心自动发券逻辑。
+ * - 遍历所有学生，按 intervalDays/awardAmount 计算应发券数；
+ * - 在事务中更新 balance、lastAwardDate 并写入 VoucherLog(type: 'auto')；
+ * - 日期在 Asia/Shanghai 下计算，同一天多次调用会因 diffDays < intervalDays 而跳过。
+ *
+ * 可被：
+ * - API 路由 GET /api/vouchers/auto-check 调用
+ * - 独立脚本/定时任务调用（例如每天 0:00 触发）
+ */
+export async function runAutoVoucherCheck(): Promise<AutoVoucherResult> {
+  const config = await prisma.config.findFirst();
+  const intervalDays = config?.intervalDays ?? 0;
+  const awardAmount = config?.awardAmount ?? 0;
+
+  if (!intervalDays || intervalDays <= 0 || !awardAmount || awardAmount <= 0) {
+    return {
+      studentCount: 0,
+      totalAwarded: 0,
+      message: "未配置发券规则或单次发放张数为 0，跳过自动发券",
+    };
+  }
+
+  const todayStr = getShanghaiDateStr(new Date());
+  const students = await prisma.student.findMany({
+    select: {
+      id: true,
+      studentId: true,
+      balance: true,
+      lastAwardDate: true,
+      createdAt: true,
+    },
+  });
+
+  type Award = { studentId: number; addBalance: number; newLastAwardDate: Date };
+  const toAward: Award[] = [];
+
+  for (const s of students) {
+    const baseDate = s.lastAwardDate ?? s.createdAt;
+    const baseStr = getShanghaiDateStr(baseDate);
+    const baseStart = startOfDayShanghai(baseStr);
+    const todayStart = startOfDayShanghai(todayStr);
+    const diffDays = Math.floor(
+      (todayStart.getTime() - baseStart.getTime()) / MS_PER_DAY
+    );
+
+    if (diffDays < intervalDays) continue;
+
+    const count = Math.floor(diffDays / intervalDays);
+    const addBalance = count * awardAmount;
+    const newDateStr = addDaysShanghai(baseStr, count * intervalDays);
+    const newLastAwardDate = startOfDayShanghai(newDateStr);
+
+    toAward.push({ studentId: s.id, addBalance, newLastAwardDate });
+  }
+
+  if (toAward.length === 0) {
+    return { studentCount: 0, totalAwarded: 0 };
+  }
+
+  let totalAwarded = 0;
+  await prisma.$transaction(async (tx) => {
+    for (const { studentId, addBalance, newLastAwardDate } of toAward) {
+      await tx.student.update({
+        where: { id: studentId },
+        data: {
+          balance: { increment: addBalance },
+          lastAwardDate: newLastAwardDate,
+        },
+      });
+      await tx.voucherLog.create({
+        data: {
+          studentId,
+          changeAmount: addBalance,
+          reason: "自动发券",
+          type: "auto",
+        },
+      });
+      totalAwarded += addBalance;
+    }
+  });
+
+  return {
+    studentCount: toAward.length,
+    totalAwarded,
+  };
+}
+
+/**
+ * 仍然保留 GET 接口，方便手动调试 / 触发一次自动发券。
+ * 但「什么时候检测」应该交给服务端定时任务，而不是前端页面进入时触发。
  */
 export async function GET() {
   try {
-    const config = await prisma.config.findFirst();
-    const intervalDays = config?.intervalDays ?? 0;
-    const awardAmount = config?.awardAmount ?? 0;
-
-    if (!intervalDays || intervalDays <= 0 || !awardAmount || awardAmount <= 0) {
-      return NextResponse.json({
-        studentCount: 0,
-        totalAwarded: 0,
-        message: "未配置发券规则或单次发放张数为 0，跳过自动发券",
-      });
-    }
-
-    const todayStr = getShanghaiDateStr(new Date());
-    const students = await prisma.student.findMany({
-      select: { id: true, studentId: true, balance: true, lastAwardDate: true, createdAt: true },
-    });
-
-    type Award = { studentId: number; addBalance: number; newLastAwardDate: Date };
-    const toAward: Award[] = [];
-
-    for (const s of students) {
-      const baseDate = s.lastAwardDate ?? s.createdAt;
-      const baseStr = getShanghaiDateStr(baseDate);
-      const baseStart = startOfDayShanghai(baseStr);
-      const todayStart = startOfDayShanghai(todayStr);
-      const diffDays = Math.floor(
-        (todayStart.getTime() - baseStart.getTime()) / MS_PER_DAY
-      );
-
-      if (diffDays < intervalDays) continue;
-
-      const count = Math.floor(diffDays / intervalDays);
-      const addBalance = count * awardAmount;
-      const newDateStr = addDaysShanghai(baseStr, count * intervalDays);
-      const newLastAwardDate = startOfDayShanghai(newDateStr);
-
-      toAward.push({ studentId: s.id, addBalance, newLastAwardDate });
-    }
-
-    if (toAward.length === 0) {
-      return NextResponse.json({ studentCount: 0, totalAwarded: 0 });
-    }
-
-    let totalAwarded = 0;
-    await prisma.$transaction(async (tx) => {
-      for (const { studentId, addBalance, newLastAwardDate } of toAward) {
-        await tx.student.update({
-          where: { id: studentId },
-          data: {
-            balance: { increment: addBalance },
-            lastAwardDate: newLastAwardDate,
-          },
-        });
-        await tx.voucherLog.create({
-          data: {
-            studentId,
-            changeAmount: addBalance,
-            reason: "自动发券",
-            type: "auto",
-          },
-        });
-        totalAwarded += addBalance;
-      }
-    });
-
-    return NextResponse.json({
-      studentCount: toAward.length,
-      totalAwarded,
-    });
+    const result = await runAutoVoucherCheck();
+    return NextResponse.json(result);
   } catch (error) {
     console.error("[GET /api/vouchers/auto-check] Error:", error);
     return NextResponse.json(

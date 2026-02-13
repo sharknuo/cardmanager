@@ -10,6 +10,8 @@ function computeNextAwardDate(
   const base = lastAwardDate ?? createdAt;
   const next = new Date(base);
   next.setDate(next.getDate() + intervalDays);
+
+  console.log("next", base, next);
   return next;
 }
 
@@ -32,6 +34,8 @@ export async function GET() {
         intervalDays
       )?.toISOString(),
     }));
+
+    console.log("data", data);
 
     return NextResponse.json({ students: data, intervalDays });
   } catch (error) {
