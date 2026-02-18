@@ -114,6 +114,9 @@ export function ClientDashboard({
     useState<StudentWithNext | null>(null);
   const [resetReason, setResetReason] = useState("");
   const [resetSubmitting, setResetSubmitting] = useState(false);
+  const [activeMenu, setActiveMenu] = useState<"students" | "logs" | "rules">(
+    "students"
+  );
 
   useEffect(() => {
     const maxPage = Math.max(
@@ -453,7 +456,10 @@ export function ClientDashboard({
           </p>
         </header>
 
-        {intervalDays != null && intervalDays > 0 && awardAmount != null && awardAmount > 0 ? (
+        {intervalDays != null &&
+        intervalDays > 0 &&
+        awardAmount != null &&
+        awardAmount > 0 ? (
           <div className="rounded-md border border-zinc-200 bg-white px-4 py-2 text-sm text-zinc-700">
             当前配置：每{" "}
             <span className="font-semibold">{intervalDays}</span> 天自动发放一次迟交券，每次{" "}
@@ -471,452 +477,506 @@ export function ClientDashboard({
           </div>
         )}
 
-        <div className="grid gap-8 md:grid-cols-[2fr,1.3fr] items-start">
-          <section className="space-y-4">
-            <div className="rounded-md border border-zinc-200 bg-white p-4 space-y-4">
-              <h2 className="text-lg font-semibold text-zinc-900">
-                发券规则
-              </h2>
-              <p className="text-sm text-zinc-500">
-                设置自动发券的间隔天数与单次发放张数，保存后立即生效。
-              </p>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-1">
-                  <label className="block text-xs font-medium text-zinc-800">
-                    间隔天数
-                  </label>
-                  <input
-                    type="number"
-                    min={0}
-                    className={inputClass}
-                    placeholder="例如：7"
-                    value={configIntervalDays}
-                    onChange={(e) => setConfigIntervalDays(e.target.value)}
-                  />
-                  <p className="text-xs text-zinc-500">
-                    每满该天数自动发放一次迟交券
+        <div className="mt-4 flex items-start gap-6">
+          <nav className="w-40 shrink-0 space-y-1">
+            <button
+              type="button"
+              onClick={() => setActiveMenu("students")}
+              className={`w-full rounded-md px-3 py-2 text-left text-sm transition ${
+                activeMenu === "students"
+                  ? "bg-zinc-900 text-white"
+                  : "text-zinc-700 hover:bg-zinc-100"
+              }`}
+            >
+              学生列表
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveMenu("logs")}
+              className={`w-full rounded-md px-3 py-2 text-left text-sm transition ${
+                activeMenu === "logs"
+                  ? "bg-zinc-900 text-white"
+                  : "text-zinc-700 hover:bg-zinc-100"
+              }`}
+            >
+              变动记录
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveMenu("rules")}
+              className={`w-full rounded-md px-3 py-2 text-left text-sm transition ${
+                activeMenu === "rules"
+                  ? "bg-zinc-900 text-white"
+                  : "text-zinc-700 hover:bg-zinc-100"
+              }`}
+            >
+              发券规则
+            </button>
+          </nav>
+
+          <div className="flex-1 space-y-6">
+            {activeMenu === "rules" && (
+              <section className="space-y-4">
+                <div className="rounded-md border border-zinc-200 bg-white p-4 space-y-4">
+                  <h2 className="text-lg font-semibold text-zinc-900">
+                    发券规则
+                  </h2>
+                  <p className="text-sm text-zinc-500">
+                    设置自动发券的间隔天数与单次发放张数，保存后立即生效。
                   </p>
-                </div>
-                <div className="space-y-1">
-                  <label className="block text-xs font-medium text-zinc-800">
-                    单次发放张数
-                  </label>
-                  <input
-                    type="number"
-                    min={0}
-                    className={inputClass}
-                    placeholder="例如：1"
-                    value={configAwardAmount}
-                    onChange={(e) => setConfigAwardAmount(e.target.value)}
-                  />
-                  <p className="text-xs text-zinc-500">
-                    每次自动发券增加的迟交券数量
-                  </p>
-                </div>
-              </div>
-              <div className="flex justify-end">
-                <Button
-                  onClick={async () => {
-                    const days =
-                      configIntervalDays === ""
-                        ? undefined
-                        : Math.max(
-                            0,
-                            Math.floor(Number(configIntervalDays)) || 0
-                          );
-                    const amount =
-                      configAwardAmount === ""
-                        ? undefined
-                        : Math.max(
-                            0,
-                            Math.floor(Number(configAwardAmount)) || 0
-                          );
-                    if (days === undefined && amount === undefined) {
-                      setError("请至少填写间隔天数或单次发放张数");
-                      return;
-                    }
-                    try {
-                      setSavingConfig(true);
-                      setError(null);
-                      const res = await fetch("/api/config", {
-                        method: "PATCH",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({
-                          intervalDays: days,
-                          awardAmount: amount,
-                        }),
-                      });
-                      const data = await res.json().catch(() => ({}));
-                      if (!res.ok) {
-                        throw new Error(data.error ?? "保存失败");
-                      }
-                      const nextDays =
-                        data.intervalDays != null ? data.intervalDays : null;
-                      const nextAmount =
-                        data.awardAmount != null ? data.awardAmount : null;
-                      setIntervalDays(nextDays);
-                      setAwardAmount(nextAmount);
-                      setConfigIntervalDays(
-                        nextDays != null ? String(nextDays) : ""
-                      );
-                      setConfigAwardAmount(
-                        nextAmount != null ? String(nextAmount) : ""
-                      );
-                      const listRes = await fetch("/api/students");
-                      if (listRes.ok) {
-                        const listData = (await listRes.json()) as {
-                          students: StudentWithNext[];
-                        };
-                        setStudents(listData.students);
-                      }
-                    } catch (err: any) {
-                      setError(err.message ?? "保存配置失败");
-                    } finally {
-                      setSavingConfig(false);
-                    }
-                  }}
-                  disabled={savingConfig}
-                  className="bg-zinc-800 text-white hover:bg-zinc-700"
-                >
-                  {savingConfig ? "保存中…" : "保存规则"}
-                </Button>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-zinc-900">
-                学生列表
-              </h2>
-            </div>
-
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>姓名</TableHead>
-                  <TableHead>学号</TableHead>
-                  <TableHead>当前余券</TableHead>
-                  <TableHead>下次发券预估</TableHead>
-                  <TableHead className="text-right">操作</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {students.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={5} className="text-center text-zinc-500">
-                      暂无学生数据，请先通过 API 或其它页面添加学生。
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  paginatedStudents.map((s) => (
-                    <TableRow key={s.id}>
-                      <TableCell className="text-xs text-zinc-500">{s.name}</TableCell>
-                      <TableCell className="text-xs text-zinc-500">
-                        {s.studentId}
-                      </TableCell>
-                      <TableCell className="text-xs text-zinc-500">{s.balance}</TableCell>
-                      <TableCell className="text-sm text-zinc-600">
-                        {s.nextAwardDate
-                          ? format(
-                              new Date(s.nextAwardDate),
-                              "yyyy-MM-dd",
-                              { locale: zhCN }
-                            )
-                          : "—"}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex flex-wrap items-center justify-end gap-2">
-                          <Button
-                            size="icon"
-                            variant="outline"
-                            className="border-zinc-300 text-zinc-700 hover:bg-zinc-100 hover:text-zinc-900"
-                            onClick={() => openAdjustDialog(s, -1)}
-                            aria-label="减少 1 张"
-                          >
-                            <Minus className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            size="icon"
-                            variant="outline"
-                            className="border-zinc-300 text-zinc-700 hover:bg-zinc-100 hover:text-zinc-900"
-                            onClick={() => openAdjustDialog(s, 1)}
-                            aria-label="增加 1 张"
-                          >
-                            <Plus className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            size="icon"
-                            variant="outline"
-                            className="border-zinc-300 text-zinc-700 hover:bg-zinc-100 hover:text-zinc-900"
-                            onClick={() => openResetDialog(s)}
-                            aria-label="重置计时"
-                          >
-                            <RefreshCcw className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            size="icon"
-                            variant="outline"
-                            className="border-zinc-300 text-zinc-700 hover:bg-zinc-100 hover:text-zinc-900"
-                            onClick={() => openEditStudentDialog(s)}
-                            aria-label="修改学生属性"
-                          >
-                            <Edit2 className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            size="icon"
-                            variant="outline"
-                            className="border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700"
-                            onClick={() => openDeleteStudentDialog(s)}
-                            aria-label="删除学生"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-
-            {students.length > 0 && (
-              <div className="flex items-center justify-between pt-2">
-                <div className="text-xs text-zinc-500">
-                  共{" "}
-                  <span className="font-semibold text-zinc-700">
-                    {totalStudents}
-                  </span>{" "}
-                  名学生
-                </div>
-                <div className="flex items-center gap-3">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={studentPage <= 1}
-                    onClick={() =>
-                      setStudentPage((p) => Math.max(1, p - 1))
-                    }
-                    className="border-zinc-300 text-zinc-700 hover:bg-zinc-100 hover:text-zinc-900"
-                  >
-                    上一页
-                  </Button>
-                  <div className="text-xs text-zinc-500">
-                    第{" "}
-                    <span className="font-semibold text-zinc-700">
-                      {studentPage}
-                    </span>{" "}
-                    /
-                    <span className="font-semibold text-zinc-700">
-                      {totalStudentPages}
-                    </span>{" "}
-                    页
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="space-y-1">
+                      <label className="block text-xs font-medium text-zinc-800">
+                        间隔天数
+                      </label>
+                      <input
+                        type="number"
+                        min={0}
+                        className={inputClass}
+                        placeholder="例如：7"
+                        value={configIntervalDays}
+                        onChange={(e) => setConfigIntervalDays(e.target.value)}
+                      />
+                      <p className="text-xs text-zinc-500">
+                        每满该天数自动发放一次迟交券
+                      </p>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="block text-xs font-medium text-zinc-800">
+                        单次发放张数
+                      </label>
+                      <input
+                        type="number"
+                        min={0}
+                        className={inputClass}
+                        placeholder="例如：1"
+                        value={configAwardAmount}
+                        onChange={(e) => setConfigAwardAmount(e.target.value)}
+                      />
+                      <p className="text-xs text-zinc-500">
+                        每次自动发券增加的迟交券数量
+                      </p>
+                    </div>
                   </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={studentPage >= totalStudentPages}
-                    onClick={() =>
-                      setStudentPage((p) => p + 1)
-                    }
-                    className="border-zinc-300 text-zinc-700 hover:bg-zinc-100 hover:text-zinc-900"
-                  >
-                    下一页
-                  </Button>
+                  <div className="flex justify-end">
+                    <Button
+                      onClick={async () => {
+                        const days =
+                          configIntervalDays === ""
+                            ? undefined
+                            : Math.max(
+                                0,
+                                Math.floor(Number(configIntervalDays)) || 0
+                              );
+                        const amount =
+                          configAwardAmount === ""
+                            ? undefined
+                            : Math.max(
+                                0,
+                                Math.floor(Number(configAwardAmount)) || 0
+                              );
+                        if (days === undefined && amount === undefined) {
+                          setError("请至少填写间隔天数或单次发放张数");
+                          return;
+                        }
+                        try {
+                          setSavingConfig(true);
+                          setError(null);
+                          const res = await fetch("/api/config", {
+                            method: "PATCH",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({
+                              intervalDays: days,
+                              awardAmount: amount,
+                            }),
+                          });
+                          const data = await res.json().catch(() => ({}));
+                          if (!res.ok) {
+                            throw new Error(data.error ?? "保存失败");
+                          }
+                          const nextDays =
+                            data.intervalDays != null ? data.intervalDays : null;
+                          const nextAmount =
+                            data.awardAmount != null ? data.awardAmount : null;
+                          setIntervalDays(nextDays);
+                          setAwardAmount(nextAmount);
+                          setConfigIntervalDays(
+                            nextDays != null ? String(nextDays) : ""
+                          );
+                          setConfigAwardAmount(
+                            nextAmount != null ? String(nextAmount) : ""
+                          );
+                          const listRes = await fetch("/api/students");
+                          if (listRes.ok) {
+                            const listData = (await listRes.json()) as {
+                              students: StudentWithNext[];
+                            };
+                            setStudents(listData.students);
+                          }
+                        } catch (err: any) {
+                          setError(err.message ?? "保存配置失败");
+                        } finally {
+                          setSavingConfig(false);
+                        }
+                      }}
+                      disabled={savingConfig}
+                      className="bg-zinc-800 text-white hover:bg-zinc-700"
+                    >
+                      {savingConfig ? "保存中…" : "保存规则"}
+                    </Button>
+                  </div>
                 </div>
-              </div>
+              </section>
             )}
 
-            <form
-              onSubmit={handleAddStudent}
-              className="mt-4 space-y-3 rounded-md border border-zinc-200 bg-white p-4"
-            >
-              <h3 className="text-sm font-semibold text-zinc-900">
-                新增学生
-              </h3>
-              <div className="grid gap-3 md:grid-cols-3">
-                <div className="space-y-1">
-                  <label className="block text-xs font-medium text-zinc-800">
-                    学生姓名
-                  </label>
-                  <input
-                    type="text"
-                    className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm shadow-sm text-zinc-900 placeholder:text-zinc-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500"
-                    placeholder="例如：张三"
-                    value={newName}
-                    onChange={(e) => setNewName(e.target.value)}
-                  />
+            {activeMenu === "students" && (
+              <section className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-lg font-semibold text-zinc-900">
+                    学生列表
+                  </h2>
                 </div>
-                <div className="space-y-1">
-                  <label className="block text-xs font-medium text-zinc-800">
-                    学号
-                  </label>
-                  <input
-                    type="text"
-                    className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm shadow-sm text-zinc-900 placeholder:text-zinc-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500"
-                    placeholder="例如：20240001"
-                    value={newStudentId}
-                    onChange={(e) => setNewStudentId(e.target.value)}
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="block text-xs font-medium text-zinc-800">
-                    初始迟交券数量（可选）
-                  </label>
-                  <input
-                    type="number"
-                    min={0}
-                    className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm shadow-sm text-zinc-900 placeholder:text-zinc-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500"
-                    placeholder="默认 0"
-                    value={newInitialBalance}
-                    onChange={(e) => setNewInitialBalance(e.target.value)}
-                  />
-                </div>
-              </div>
-              <div className="flex justify-end">
-                <Button type="submit" disabled={addingStudent}>
-                  {addingStudent ? "添加中..." : "添加学生"}
-                </Button>
-              </div>
-            </form>
-          </section>
 
-          <section className="space-y-4">
-            <div>
-              <h2 className="text-lg font-semibold text-zinc-900">
-                变动记录
-              </h2>
-              <p className="mt-1 text-sm text-zinc-500">
-                默认按时间倒序显示所有记录，可通过日期范围筛选。
-              </p>
-            </div>
-            <div className="rounded-md border border-zinc-200 bg-white p-3 space-y-3">
-              <div className="grid gap-3 md:grid-cols-2">
-                <div className="space-y-1">
-                  <label className="block text-xs font-medium text-zinc-800">
-                    开始日期
-                  </label>
-                  <input
-                    type="date"
-                    className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm shadow-sm text-zinc-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500"
-                    value={startDate}
-                    onChange={(e) => {
-                      setStartDate(e.target.value);
-                      setPage(1);
-                    }}
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="block text-xs font-medium text-zinc-800">
-                    结束日期
-                  </label>
-                  <input
-                    type="date"
-                    className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm shadow-sm text-zinc-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500"
-                    value={endDate}
-                    onChange={(e) => {
-                      setEndDate(e.target.value);
-                      setPage(1);
-                    }}
-                  />
-                </div>
-              </div>
-              <div className="flex items-center justify-between text-xs text-zinc-500">
-                <div>
-                  共{" "}
-                  <span className="font-semibold text-zinc-700">
-                    {totalLogs}
-                  </span>{" "}
-                  条记录
-                </div>
-                {loadingLogs && (
-                  <div className="text-xs text-zinc-400">加载中...</div>
-                )}
-              </div>
-              {logs.length === 0 ? (
-                <div className="py-4 text-center text-sm text-zinc-500">
-                  暂无变动记录。
-                </div>
-              ) : (
-                <>
-                  <ul className="divide-y divide-zinc-100 text-sm">
-                    {logs.map((log) => (
-                      <li key={log.id} className="py-2 flex flex-col gap-1">
-                        <div className="flex items-center justify-between">
-                          <span className="font-medium text-zinc-900">
-                            {log.student.name} ({log.student.studentId})
-                          </span>
-                          {log.type === "reset" ? (
-                            <span className="text-zinc-600">重置计时</span>
-                          ) : (
-                            <span
-                              className={
-                                log.changeAmount >= 0
-                                  ? "text-emerald-600"
-                                  : "text-red-600"
-                              }
-                            >
-                              {log.changeAmount > 0 ? "+" : ""}
-                              {log.changeAmount}
-                            </span>
-                          )}
-                        </div>
-                        <div className="text-xs text-zinc-500">
-                          {format(new Date(log.createdAt), "yyyy-MM-dd HH:mm:ss", {
-                            locale: zhCN,
-                          })}{" "}
-                          ·{" "}
-                          {log.type === "manual"
-                            ? "手动调整"
-                            : log.type === "auto"
-                              ? "自动发券"
-                              : "重置计时"}
-                        </div>
-                        <div className="text-xs text-zinc-600">
-                          理由：{log.reason?.trim() ? log.reason : "/"}
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>姓名</TableHead>
+                      <TableHead>学号</TableHead>
+                      <TableHead>当前余券</TableHead>
+                      <TableHead>下次发券预估</TableHead>
+                      <TableHead className="text-right">操作</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {students.length === 0 ? (
+                      <TableRow>
+                        <TableCell
+                          colSpan={5}
+                          className="text-center text-zinc-500"
+                        >
+                          暂无学生数据，请先通过 API 或其它页面添加学生。
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      paginatedStudents.map((s) => (
+                        <TableRow key={s.id}>
+                          <TableCell className="text-xs text-zinc-500">
+                            {s.name}
+                          </TableCell>
+                          <TableCell className="text-xs text-zinc-500">
+                            {s.studentId}
+                          </TableCell>
+                          <TableCell className="text-xs text-zinc-500">
+                            {s.balance}
+                          </TableCell>
+                          <TableCell className="text-sm text-zinc-600">
+                            {s.nextAwardDate
+                              ? format(
+                                  new Date(s.nextAwardDate),
+                                  "yyyy-MM-dd",
+                                  { locale: zhCN }
+                                )
+                              : "—"}
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex flex-wrap items-center justify-end gap-2">
+                              <Button
+                                size="icon"
+                                variant="outline"
+                                className="border-zinc-300 text-zinc-700 hover:bg-zinc-100 hover:text-zinc-900"
+                                onClick={() => openAdjustDialog(s, -1)}
+                                aria-label="减少 1 张"
+                              >
+                                <Minus className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                size="icon"
+                                variant="outline"
+                                className="border-zinc-300 text-zinc-700 hover:bg-zinc-100 hover:text-zinc-900"
+                                onClick={() => openAdjustDialog(s, 1)}
+                                aria-label="增加 1 张"
+                              >
+                                <Plus className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                size="icon"
+                                variant="outline"
+                                className="border-zinc-300 text-zinc-700 hover:bg-zinc-100 hover:text-zinc-900"
+                                onClick={() => openResetDialog(s)}
+                                aria-label="重置计时"
+                              >
+                                <RefreshCcw className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                size="icon"
+                                variant="outline"
+                                className="border-zinc-300 text-zinc-700 hover:bg-zinc-100 hover:text-zinc-900"
+                                onClick={() => openEditStudentDialog(s)}
+                                aria-label="修改学生属性"
+                              >
+                                <Edit2 className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                size="icon"
+                                variant="outline"
+                                className="border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700"
+                                onClick={() => openDeleteStudentDialog(s)}
+                                aria-label="删除学生"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+
+                {students.length > 0 && (
                   <div className="flex items-center justify-between pt-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      disabled={page <= 1 || loadingLogs}
-                      onClick={() => setPage((p) => Math.max(1, p - 1))}
-                      className="border-zinc-300 text-zinc-700 hover:bg-zinc-100 hover:text-zinc-900"
-                    >
-                      上一页
-                    </Button>
                     <div className="text-xs text-zinc-500">
-                      第{" "}
+                      共{" "}
                       <span className="font-semibold text-zinc-700">
-                        {page}
+                        {totalStudents}
                       </span>{" "}
-                      /
-                      <span className="font-semibold text-zinc-700">
-                        {Math.max(1, Math.ceil(totalLogs / pageSize))}
-                      </span>{" "}
-                      页
+                      名学生
                     </div>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      disabled={
-                        loadingLogs ||
-                        logs.length === 0 ||
-                        page >= Math.max(1, Math.ceil(totalLogs / pageSize))
-                      }
-                      onClick={() =>
-                        setPage((p) => p + 1)
-                      }
-                      className="border-zinc-300 text-zinc-700 hover:bg-zinc-100 hover:text-zinc-900"
-                    >
-                      下一页
+                    <div className="flex items-center gap-3">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={studentPage <= 1}
+                        onClick={() =>
+                          setStudentPage((p) => Math.max(1, p - 1))
+                        }
+                        className="border-zinc-300 text-zinc-700 hover:bg-zinc-100 hover:text-zinc-900"
+                      >
+                        上一页
+                      </Button>
+                      <div className="text-xs text-zinc-500">
+                        第{" "}
+                        <span className="font-semibold text-zinc-700">
+                          {studentPage}
+                        </span>{" "}
+                        /
+                        <span className="font-semibold text-zinc-700">
+                          {totalStudentPages}
+                        </span>{" "}
+                        页
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={studentPage >= totalStudentPages}
+                        onClick={() => setStudentPage((p) => p + 1)}
+                        className="border-zinc-300 text-zinc-700 hover:bg-zinc-100 hover:text-zinc-900"
+                      >
+                        下一页
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
+                <form
+                  onSubmit={handleAddStudent}
+                  className="mt-4 space-y-3 rounded-md border border-zinc-200 bg-white p-4"
+                >
+                  <h3 className="text-sm font-semibold text-zinc-900">
+                    新增学生
+                  </h3>
+                  <div className="grid gap-3 md:grid-cols-3">
+                    <div className="space-y-1">
+                      <label className="block text-xs font-medium text-zinc-800">
+                        学生姓名
+                      </label>
+                      <input
+                        type="text"
+                        className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm shadow-sm text-zinc-900 placeholder:text-zinc-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500"
+                        placeholder="例如：张三"
+                        value={newName}
+                        onChange={(e) => setNewName(e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="block text-xs font-medium text-zinc-800">
+                        学号
+                      </label>
+                      <input
+                        type="text"
+                        className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm shadow-sm text-zinc-900 placeholder:text-zinc-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500"
+                        placeholder="例如：20240001"
+                        value={newStudentId}
+                        onChange={(e) => setNewStudentId(e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="block text-xs font-medium text-zinc-800">
+                        初始迟交券数量（可选）
+                      </label>
+                      <input
+                        type="number"
+                        min={0}
+                        className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm shadow-sm text-zinc-900 placeholder:text-zinc-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500"
+                        placeholder="默认 0"
+                        value={newInitialBalance}
+                        onChange={(e) => setNewInitialBalance(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                  <div className="flex justify-end">
+                    <Button type="submit" disabled={addingStudent}>
+                      {addingStudent ? "添加中..." : "添加学生"}
                     </Button>
                   </div>
-                </>
-              )}
-            </div>
-          </section>
+                </form>
+              </section>
+            )}
+
+            {activeMenu === "logs" && (
+              <section className="space-y-4">
+                <div>
+                  <h2 className="text-lg font-semibold text-zinc-900">
+                    变动记录
+                  </h2>
+                  <p className="mt-1 text-sm text-zinc-500">
+                    默认按时间倒序显示所有记录，可通过日期范围筛选。
+                  </p>
+                </div>
+                <div className="rounded-md border border-zinc-200 bg-white p-3 space-y-3">
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <div className="space-y-1">
+                      <label className="block text-xs font-medium text-zinc-800">
+                        开始日期
+                      </label>
+                      <input
+                        type="date"
+                        className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm shadow-sm text-zinc-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500"
+                        value={startDate}
+                        onChange={(e) => {
+                          setStartDate(e.target.value);
+                          setPage(1);
+                        }}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="block text-xs font-medium text-zinc-800">
+                        结束日期
+                      </label>
+                      <input
+                        type="date"
+                        className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm shadow-sm text-zinc-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500"
+                        value={endDate}
+                        onChange={(e) => {
+                          setEndDate(e.target.value);
+                          setPage(1);
+                        }}
+                      />
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between text-xs text-zinc-500">
+                    <div>
+                      共{" "}
+                      <span className="font-semibold text-zinc-700">
+                        {totalLogs}
+                      </span>{" "}
+                      条记录
+                    </div>
+                    {loadingLogs && (
+                      <div className="text-xs text-zinc-400">加载中...</div>
+                    )}
+                  </div>
+                  {logs.length === 0 ? (
+                    <div className="py-4 text-center text-sm text-zinc-500">
+                      暂无变动记录。
+                    </div>
+                  ) : (
+                    <>
+                      <ul className="divide-y divide-zinc-100 text-sm">
+                        {logs.map((log) => (
+                          <li key={log.id} className="py-2 flex flex-col gap-1">
+                            <div className="flex items-center justify-between">
+                              <span className="font-medium text-zinc-900">
+                                {log.student.name} ({log.student.studentId})
+                              </span>
+                              {log.type === "reset" ? (
+                                <span className="text-zinc-600">重置计时</span>
+                              ) : (
+                                <span
+                                  className={
+                                    log.changeAmount >= 0
+                                      ? "text-emerald-600"
+                                      : "text-red-600"
+                                  }
+                                >
+                                  {log.changeAmount > 0 ? "+" : ""}
+                                  {log.changeAmount}
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-xs text-zinc-500">
+                              {format(
+                                new Date(log.createdAt),
+                                "yyyy-MM-dd HH:mm:ss",
+                                {
+                                  locale: zhCN,
+                                }
+                              )}{" "}
+                              ·{" "}
+                              {log.type === "manual"
+                                ? "手动调整"
+                                : log.type === "auto"
+                                  ? "自动发券"
+                                  : "重置计时"}
+                            </div>
+                            <div className="text-xs text-zinc-600">
+                              理由：{log.reason?.trim() ? log.reason : "/"}
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                      <div className="flex items-center justify-between pt-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={page <= 1 || loadingLogs}
+                          onClick={() => setPage((p) => Math.max(1, p - 1))}
+                          className="border-zinc-300 text-zinc-700 hover:bg-zinc-100 hover:text-zinc-900"
+                        >
+                          上一页
+                        </Button>
+                        <div className="text-xs text-zinc-500">
+                          第{" "}
+                          <span className="font-semibold text-zinc-700">
+                            {page}
+                          </span>{" "}
+                          /
+                          <span className="font-semibold text-zinc-700">
+                            {Math.max(1, Math.ceil(totalLogs / pageSize))}
+                          </span>{" "}
+                          页
+                        </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={
+                            loadingLogs ||
+                            logs.length === 0 ||
+                            page >=
+                              Math.max(1, Math.ceil(totalLogs / pageSize))
+                          }
+                          onClick={() => setPage((p) => p + 1)}
+                          className="border-zinc-300 text-zinc-700 hover:bg-zinc-100 hover:text-zinc-900"
+                        >
+                          下一页
+                        </Button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </section>
+            )}
+          </div>
         </div>
 
         <Dialog open={reasonDialogOpen} onOpenChange={setReasonDialogOpen}>
