@@ -75,7 +75,10 @@ export function ClientDashboard({
   const [loadingLogs, setLoadingLogs] = useState(false);
   const [totalLogs, setTotalLogs] = useState(0);
   const [page, setPage] = useState(1);
-  const pageSize =5;
+  const pageSize = 5;
+
+  const [studentPage, setStudentPage] = useState(1);
+  const studentsPerPage = 7;
 
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
@@ -111,6 +114,38 @@ export function ClientDashboard({
     useState<StudentWithNext | null>(null);
   const [resetReason, setResetReason] = useState("");
   const [resetSubmitting, setResetSubmitting] = useState(false);
+
+  useEffect(() => {
+    const maxPage = Math.max(
+      1,
+      Math.ceil(students.length / studentsPerPage)
+    );
+    setStudentPage((prev) => Math.min(prev, maxPage));
+  }, [students.length, studentsPerPage]);
+
+  const sortedStudents = [...students].sort((a, b) => {
+    const aIdNum = Number(a.studentId);
+    const bIdNum = Number(b.studentId);
+
+    const aIsNum = !Number.isNaN(aIdNum);
+    const bIsNum = !Number.isNaN(bIdNum);
+
+    if (aIsNum && bIsNum) {
+      return aIdNum - bIdNum;
+    }
+
+    return a.studentId.localeCompare(b.studentId, "zh-CN");
+  });
+
+  const totalStudents = sortedStudents.length;
+  const totalStudentPages = Math.max(
+    1,
+    Math.ceil(totalStudents / studentsPerPage)
+  );
+  const paginatedStudents = sortedStudents.slice(
+    (studentPage - 1) * studentsPerPage,
+    studentPage * studentsPerPage
+  );
 
   useEffect(() => {
     const controller = new AbortController();
@@ -205,11 +240,6 @@ export function ClientDashboard({
 
   const handleSubmitReset = async () => {
     if (!resetPendingStudent) return;
-    const trimmedReason = resetReason.trim();
-    if (!trimmedReason) {
-      setError("请填写重置理由");
-      return;
-    }
     try {
       setResetSubmitting(true);
       setError(null);
@@ -218,7 +248,7 @@ export function ClientDashboard({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           studentId: resetPendingStudent.studentId,
-          reason: trimmedReason,
+          reason: resetReason.trim(),
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -577,7 +607,7 @@ export function ClientDashboard({
                     </TableCell>
                   </TableRow>
                 ) : (
-                  students.map((s) => (
+                  paginatedStudents.map((s) => (
                     <TableRow key={s.id}>
                       <TableCell className="text-xs text-zinc-500">{s.name}</TableCell>
                       <TableCell className="text-xs text-zinc-500">
@@ -647,6 +677,53 @@ export function ClientDashboard({
                 )}
               </TableBody>
             </Table>
+
+            {students.length > 0 && (
+              <div className="flex items-center justify-between pt-2">
+                <div className="text-xs text-zinc-500">
+                  共{" "}
+                  <span className="font-semibold text-zinc-700">
+                    {totalStudents}
+                  </span>{" "}
+                  名学生
+                </div>
+                <div className="flex items-center gap-3">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={studentPage <= 1}
+                    onClick={() =>
+                      setStudentPage((p) => Math.max(1, p - 1))
+                    }
+                    className="border-zinc-300 text-zinc-700 hover:bg-zinc-100 hover:text-zinc-900"
+                  >
+                    上一页
+                  </Button>
+                  <div className="text-xs text-zinc-500">
+                    第{" "}
+                    <span className="font-semibold text-zinc-700">
+                      {studentPage}
+                    </span>{" "}
+                    /
+                    <span className="font-semibold text-zinc-700">
+                      {totalStudentPages}
+                    </span>{" "}
+                    页
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={studentPage >= totalStudentPages}
+                    onClick={() =>
+                      setStudentPage((p) => p + 1)
+                    }
+                    className="border-zinc-300 text-zinc-700 hover:bg-zinc-100 hover:text-zinc-900"
+                  >
+                    下一页
+                  </Button>
+                </div>
+              </div>
+            )}
 
             <form
               onSubmit={handleAddStudent}
@@ -805,6 +882,7 @@ export function ClientDashboard({
                       size="sm"
                       disabled={page <= 1 || loadingLogs}
                       onClick={() => setPage((p) => Math.max(1, p - 1))}
+                      className="border-zinc-300 text-zinc-700 hover:bg-zinc-100 hover:text-zinc-900"
                     >
                       上一页
                     </Button>
@@ -830,6 +908,7 @@ export function ClientDashboard({
                       onClick={() =>
                         setPage((p) => p + 1)
                       }
+                      className="border-zinc-300 text-zinc-700 hover:bg-zinc-100 hover:text-zinc-900"
                     >
                       下一页
                     </Button>
