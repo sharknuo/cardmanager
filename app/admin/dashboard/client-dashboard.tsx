@@ -49,6 +49,8 @@ type Props = {
   awardAmount: number | null;
 };
 
+const DASHBOARD_PASSWORD = "nuonuo2026";
+
 const inputClass =
   "w-full rounded-md border border-zinc-300 px-3 py-2 text-sm shadow-sm text-zinc-900 placeholder:text-zinc-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500";
 
@@ -117,6 +119,31 @@ export function ClientDashboard({
   const [activeMenu, setActiveMenu] = useState<"students" | "logs" | "rules">(
     "students"
   );
+
+  const [isAuthed, setIsAuthed] = useState(false);
+  const [passwordInput, setPasswordInput] = useState("");
+  const [authError, setAuthError] = useState("");
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const stored = window.localStorage.getItem("dashboardAuthed");
+    if (stored === "true") {
+      setIsAuthed(true);
+    }
+  }, []);
+
+  const handleSubmitPassword = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (passwordInput === DASHBOARD_PASSWORD) {
+      setIsAuthed(true);
+      setAuthError("");
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem("dashboardAuthed", "true");
+      }
+    } else {
+      setAuthError("密码错误，请重试");
+    }
+  };
 
   useEffect(() => {
     const maxPage = Math.max(
@@ -302,12 +329,12 @@ export function ClientDashboard({
     if (!editingStudent) return;
 
     const trimmedName = editName.trim();
-  const trimmedStudentId = editStudentId.trim();
+    const trimmedStudentId = editStudentId.trim();
 
-  if (!trimmedName) {
-    setError("请填写学生姓名");
-    return;
-  }
+    if (!trimmedName) {
+      setError("请填写学生姓名");
+      return;
+    }
 
     try {
       setProcessingEdit(true);
@@ -443,6 +470,45 @@ export function ClientDashboard({
       setAddingStudent(false);
     }
   };
+
+  if (!isAuthed) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-zinc-50 px-4">
+        <form
+          onSubmit={handleSubmitPassword}
+          className="w-full max-w-sm space-y-4 rounded-xl border border-zinc-200 bg-white p-6 shadow-sm"
+        >
+          <h1 className="text-lg font-semibold text-zinc-900">
+            请输入管理密码
+          </h1>
+          <p className="text-xs text-zinc-500">
+            仅限管理员访问，输入正确密码后才能进入后台。
+          </p>
+          <div className="space-y-1">
+            <label className="block text-xs font-medium text-zinc-800">
+              密码
+            </label>
+            <input
+              type="password"
+              className={inputClass}
+              value={passwordInput}
+              onChange={(e) => {
+                setPasswordInput(e.target.value);
+                if (authError) setAuthError("");
+              }}
+              placeholder="请输入密码"
+            />
+          </div>
+          {authError && (
+            <p className="text-xs text-red-600">{authError}</p>
+          )}
+          <Button type="submit" className="w-full">
+            进入后台
+          </Button>
+        </form>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-zinc-50 px-6 py-8">
