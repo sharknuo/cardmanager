@@ -145,6 +145,14 @@ export function ClientDashboard({
     }
   };
 
+  const handleLogout = () => {
+    setIsAuthed(false);
+    setPasswordInput("");
+    if (typeof window !== "undefined") {
+      window.localStorage.removeItem("dashboardAuthed");
+    }
+  };
+
   useEffect(() => {
     const maxPage = Math.max(
       1,
@@ -513,13 +521,23 @@ export function ClientDashboard({
   return (
     <div className="min-h-screen bg-zinc-50 px-6 py-8">
       <div className="mx-auto max-w-6xl space-y-8">
-        <header>
-          <h1 className="text-2xl font-semibold text-zinc-900">
-            管理后台 - 迟交券
-          </h1>
-          <p className="mt-1 text-sm text-zinc-500">
-            查看学生当前余券、预计发券日期，并支持快速增减与重置计时。
-          </p>
+        <header className="flex items-center justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-semibold text-zinc-900">
+              管理后台 - 迟交券
+            </h1>
+            <p className="mt-1 text-sm text-zinc-500">
+              查看学生当前余券、预计发券日期，并支持快速增减与重置计时。
+            </p>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={handleLogout}
+          >
+            退出登录
+          </Button>
         </header>
 
         {intervalDays != null &&
