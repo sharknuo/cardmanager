@@ -122,9 +122,24 @@ export async function runAutoVoucherCheck(): Promise<AutoVoucherResult> {
 /**
  * 仍然保留 GET 接口，方便手动调试 / 触发一次自动发券。
  * 但「什么时候检测」应该交给服务端定时任务，而不是前端页面进入时触发。
+ *
+ * 为了防止被任意人调用，这里要求携带正确的 Authorization 头：
+ * Authorization: Bearer <CRON_SECRET>
+ *
+ * Vercel Cron 会自动在请求里加入该 header（你需要在项目环境变量里配置 CRON_SECRET）。
  */
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    if (
+      request.headers.get("authorization") !==
+      `Bearer ${process.env.CRON_SECRET}`
+    ) {
+      return NextResponse.json(
+        { error: "Unauthorized" },
+        { status: 401 }
+      );
+    }
+
     const result = await runAutoVoucherCheck();
     return NextResponse.json(result);
   } catch (error) {
