@@ -79,9 +79,6 @@ export function ClientDashboard({
   const [page, setPage] = useState(1);
   const pageSize = 5;
 
-  const [studentPage, setStudentPage] = useState(1);
-  const studentsPerPage = 7;
-
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
 
@@ -98,6 +95,8 @@ export function ClientDashboard({
   const [newStudentId, setNewStudentId] = useState("");
   const [newInitialBalance, setNewInitialBalance] = useState("");
   const [addingStudent, setAddingStudent] = useState(false);
+
+  const [addDialogOpen, setAddDialogOpen] = useState(false);
 
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [editingStudent, setEditingStudent] = useState<StudentWithNext | null>(
@@ -153,14 +152,6 @@ export function ClientDashboard({
     }
   };
 
-  useEffect(() => {
-    const maxPage = Math.max(
-      1,
-      Math.ceil(students.length / studentsPerPage)
-    );
-    setStudentPage((prev) => Math.min(prev, maxPage));
-  }, [students.length, studentsPerPage]);
-
   const sortedStudents = [...students].sort((a, b) => {
     const aIdNum = Number(a.studentId);
     const bIdNum = Number(b.studentId);
@@ -176,14 +167,6 @@ export function ClientDashboard({
   });
 
   const totalStudents = sortedStudents.length;
-  const totalStudentPages = Math.max(
-    1,
-    Math.ceil(totalStudents / studentsPerPage)
-  );
-  const paginatedStudents = sortedStudents.slice(
-    (studentPage - 1) * studentsPerPage,
-    studentPage * studentsPerPage
-  );
 
   useEffect(() => {
     const controller = new AbortController();
@@ -471,6 +454,7 @@ export function ClientDashboard({
       setNewName("");
       setNewStudentId("");
       setNewInitialBalance("");
+      setAddDialogOpen(false);
     } catch (err: any) {
       console.error(err);
       setError(err.message ?? "添加学生失败");
@@ -715,10 +699,21 @@ export function ClientDashboard({
 
             {activeMenu === "students" && (
               <section className="space-y-4">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between gap-3">
                   <h2 className="text-lg font-semibold text-zinc-900">
                     学生列表
                   </h2>
+                  <Button
+                    type="button"
+                    size="sm"
+                    className="bg-zinc-900 text-white hover:bg-zinc-800"
+                    onClick={() => {
+                      setError(null);
+                      setAddDialogOpen(true);
+                    }}
+                  >
+                    新增学生
+                  </Button>
                 </div>
 
                 <Table>
@@ -742,7 +737,7 @@ export function ClientDashboard({
                         </TableCell>
                       </TableRow>
                     ) : (
-                      paginatedStudents.map((s) => (
+                      sortedStudents.map((s) => (
                         <TableRow key={s.id}>
                           <TableCell className="text-xs text-zinc-500">
                             {s.name}
@@ -826,94 +821,8 @@ export function ClientDashboard({
                       </span>{" "}
                       名学生
                     </div>
-                    <div className="flex items-center gap-3">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        disabled={studentPage <= 1}
-                        onClick={() =>
-                          setStudentPage((p) => Math.max(1, p - 1))
-                        }
-                        className="border-zinc-300 text-zinc-700 hover:bg-zinc-100 hover:text-zinc-900"
-                      >
-                        上一页
-                      </Button>
-                      <div className="text-xs text-zinc-500">
-                        第{" "}
-                        <span className="font-semibold text-zinc-700">
-                          {studentPage}
-                        </span>{" "}
-                        /
-                        <span className="font-semibold text-zinc-700">
-                          {totalStudentPages}
-                        </span>{" "}
-                        页
-                      </div>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        disabled={studentPage >= totalStudentPages}
-                        onClick={() => setStudentPage((p) => p + 1)}
-                        className="border-zinc-300 text-zinc-700 hover:bg-zinc-100 hover:text-zinc-900"
-                      >
-                        下一页
-                      </Button>
-                    </div>
                   </div>
                 )}
-
-                <form
-                  onSubmit={handleAddStudent}
-                  className="mt-4 space-y-3 rounded-md border border-zinc-200 bg-white p-4"
-                >
-                  <h3 className="text-sm font-semibold text-zinc-900">
-                    新增学生
-                  </h3>
-                  <div className="grid gap-3 md:grid-cols-3">
-                    <div className="space-y-1">
-                      <label className="block text-xs font-medium text-zinc-800">
-                        学生姓名
-                      </label>
-                      <input
-                        type="text"
-                        className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm shadow-sm text-zinc-900 placeholder:text-zinc-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500"
-                        placeholder="例如：张三"
-                        value={newName}
-                        onChange={(e) => setNewName(e.target.value)}
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="block text-xs font-medium text-zinc-800">
-                        学号
-                      </label>
-                      <input
-                        type="text"
-                        className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm shadow-sm text-zinc-900 placeholder:text-zinc-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500"
-                        placeholder="例如：20240001"
-                        value={newStudentId}
-                        onChange={(e) => setNewStudentId(e.target.value)}
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="block text-xs font-medium text-zinc-800">
-                        初始迟交券数量（可选）
-                      </label>
-                      <input
-                        type="number"
-                        min={0}
-                        className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm shadow-sm text-zinc-900 placeholder:text-zinc-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500"
-                        placeholder="默认 0"
-                        value={newInitialBalance}
-                        onChange={(e) => setNewInitialBalance(e.target.value)}
-                      />
-                    </div>
-                  </div>
-                  <div className="flex justify-end">
-                    <Button type="submit" disabled={addingStudent}>
-                      {addingStudent ? "添加中..." : "添加学生"}
-                    </Button>
-                  </div>
-                </form>
               </section>
             )}
 
@@ -1129,6 +1038,74 @@ export function ClientDashboard({
                 </Button>
               </div>
             </div>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
+          <DialogContent className="sm:max-w-[640px]">
+            <DialogHeader>
+              <DialogTitle className="text-sm text-zinc-900">
+                新增学生
+              </DialogTitle>
+              <DialogDescription>
+                填写学生信息后点击添加，学生将出现在列表中。
+              </DialogDescription>
+            </DialogHeader>
+            <form onSubmit={handleAddStudent} className="space-y-4">
+              <div className="grid gap-4 md:grid-cols-3">
+                <div className="space-y-1">
+                  <label className="block text-xs font-medium text-zinc-800">
+                    学生姓名
+                  </label>
+                  <input
+                    type="text"
+                    className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm shadow-sm text-zinc-900 placeholder:text-zinc-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500"
+                    placeholder="例如：张三"
+                    value={newName}
+                    onChange={(e) => setNewName(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="block text-xs font-medium text-zinc-800">
+                    学号
+                  </label>
+                  <input
+                    type="text"
+                    className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm shadow-sm text-zinc-900 placeholder:text-zinc-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500"
+                    placeholder="例如：20240001"
+                    value={newStudentId}
+                    onChange={(e) => setNewStudentId(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="block text-xs font-medium text-zinc-800">
+                    初始迟交券数量（可选）
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm shadow-sm text-zinc-900 placeholder:text-zinc-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500"
+                    placeholder="默认 0"
+                    value={newInitialBalance}
+                    onChange={(e) => setNewInitialBalance(e.target.value)}
+                  />
+                </div>
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="border-zinc-300 text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900"
+                  onClick={() => setAddDialogOpen(false)}
+                  disabled={addingStudent}
+                >
+                  取消
+                </Button>
+                <Button type="submit" disabled={addingStudent}>
+                  {addingStudent ? "添加中..." : "添加学生"}
+                </Button>
+              </div>
+            </form>
           </DialogContent>
         </Dialog>
 
