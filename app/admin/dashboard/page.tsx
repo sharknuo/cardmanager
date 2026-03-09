@@ -1,6 +1,8 @@
 import { prisma } from "@/lib/prisma";
 import { ClientDashboard, type StudentWithNext } from "./client-dashboard";
 
+export const dynamic = "force-dynamic";
+
 async function getInitialData() {
   const [students, config] = await Promise.all([
     prisma.student.findMany({
