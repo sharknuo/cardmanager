@@ -91,27 +91,30 @@ export async function runAutoVoucherCheck(): Promise<AutoVoucherResult> {
     return { studentCount: 0, totalAwarded: 0 };
   }
 
-  let totalAwarded = 0;
-  await prisma.$transaction(async (tx) => {
-    for (const { studentId, addBalance, newLastAwardDate } of toAward) {
-      await tx.student.update({
-        where: { id: studentId },
-        data: {
-          balance: { increment: addBalance },
-          lastAwardDate: newLastAwardDate,
-        },
-      });
-      await tx.voucherLog.create({
-        data: {
-          studentId,
-          changeAmount: addBalance,
-          reason: "自动发券",
-          type: "auto",
-        },
-      });
-      totalAwarded += addBalance;
-    }
-  });
+  const totalAwarded = toAward.reduce(
+    (sum, { addBalance }) => sum + addBalance,
+    0
+  );
+
+  const txOps = toAward.flatMap(({ studentId, addBalance, newLastAwardDate }) => [
+    prisma.student.update({
+      where: { id: studentId },
+      data: {
+        balance: { increment: addBalance },
+        lastAwardDate: newLastAwardDate,
+      },
+    }),
+    prisma.voucherLog.create({
+      data: {
+        studentId,
+        changeAmount: addBalance,
+        reason: "自动发券",
+        type: "auto",
+      },
+    }),
+  ]);
+
+  await prisma.$transaction(txOps);
 
   return {
     studentCount: toAward.length,
