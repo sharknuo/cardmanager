@@ -2,7 +2,7 @@
   "crons": [
     {
       "path": "/api/vouchers/auto-check",
-      "schedule": "25 13 * * *"
+      "schedule": "0 16 * * *"
     }
   ]
 }
