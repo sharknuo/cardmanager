@@ -106,10 +106,12 @@ export async function runAutoVoucherCheck(): Promise<AutoVoucherResult> {
   await prisma.$executeRaw`
     UPDATE "Student" AS s
     SET
-      "balance" = s."balance" + v.add_balance,
-      "lastAwardDate" = v.new_last_award_date
-    FROM (VALUES ${updateValues}) AS v(id, add_balance, new_last_award_date)
-    WHERE s."id" = v.id
+      "balance" = s."balance" + (v.add_balance::int),
+      "lastAwardDate" = v.new_last_award_date::timestamptz
+    FROM (
+      VALUES ${updateValues}
+    ) AS v(id, add_balance, new_last_award_date)
+    WHERE s."id" = v.id::int
   `;
 
   await prisma.voucherLog.createMany({
