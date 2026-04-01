@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { addDays } from "date-fns";
 import { prisma } from "@/lib/prisma";
+import { Prisma } from "@/src/generated/client";
 
 const MS_PER_DAY = 86400000;
 
@@ -96,25 +97,29 @@ export async function runAutoVoucherCheck(): Promise<AutoVoucherResult> {
     0
   );
 
-  const txOps = toAward.flatMap(({ studentId, addBalance, newLastAwardDate }) => [
-    prisma.student.update({
-      where: { id: studentId },
-      data: {
-        balance: { increment: addBalance },
-        lastAwardDate: newLastAwardDate,
-      },
-    }),
-    prisma.voucherLog.create({
-      data: {
-        studentId,
-        changeAmount: addBalance,
-        reason: "自动发券",
-        type: "auto",
-      },
-    }),
-  ]);
+  const updateValues = Prisma.join(
+    toAward.map(({ studentId, addBalance, newLastAwardDate }) =>
+      Prisma.sql`(${studentId}, ${addBalance}, ${newLastAwardDate})`
+    )
+  );
 
-  await prisma.$transaction(txOps);
+  await prisma.$executeRaw`
+    UPDATE "Student" AS s
+    SET
+      "balance" = s."balance" + v.add_balance,
+      "lastAwardDate" = v.new_last_award_date
+    FROM (VALUES ${updateValues}) AS v(id, add_balance, new_last_award_date)
+    WHERE s."id" = v.id
+  `;
+
+  await prisma.voucherLog.createMany({
+    data: toAward.map(({ studentId, addBalance }) => ({
+      studentId,
+      changeAmount: addBalance,
+      reason: "自动发券",
+      type: "auto",
+    })),
+  });
 
   return {
     studentCount: toAward.length,
